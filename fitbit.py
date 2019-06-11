@@ -257,6 +257,16 @@ def setup_axes(fig, date, end_date):
 
     return axes
 
+def setup_xticks(axes, date, end_date, minor = False, td = timedelta(days=1), label = lambda date: format_date(date)):
+    xticks, labels = [], []
+    while(date <= end_date):
+        xticks.append(date2num(date))
+        labels.append(label(date))
+        date += td
+
+    axes.set_xticks(xticks, minor=minor)
+    axes.set_xticklabels(labels, minor=minor)
+
 
 def savefig(fig, path, filename, points):
     fig.canvas.draw()
@@ -407,26 +417,9 @@ def Graph(path, name):
 
             axes = setup_axes(fig, cur_date, end_date)
 
-            xticks, labels = [], []
-            date = cur_date
-            while(date <= end_date):
-                xticks.append(date2num(date))
-                labels.append(format_date(date))
-                date += timedelta(days=1)
+            setup_xticks(axes, cur_date, end_date)
 
-            axes.set_xticks(xticks, minor=False)
-            axes.set_xticklabels(labels, minor=False)
-
-
-            xticks, labels = [], []
-            date = cur_date
-            while(date <= end_date):
-                xticks.append(date2num(date))
-                labels.append(str(date.hour))
-                date += timedelta(hours=8)
-
-            axes.set_xticks(xticks, minor=True)
-            axes.set_xticklabels(labels, minor=True)
+            setup_xticks(axes, cur_date, end_date, minor = True, td = timedelta(hours=8), label = lambda date: str(date.hour))
 
 
             # draw and save
@@ -453,8 +446,7 @@ def Graph(path, name):
 
             date_fmt = format_date(date, day=False)
 
-            fig = plt.figure(figsize=(20,10))  
-            fig.suptitle('Heart Rate %s %s / 1 month' % (name, date_fmt))
+            fig = newfig('Heart Rate %s %s / 1 month' % (name, date_fmt))
 
             y = heart_60min[i:j]
             plt.plot(heart_60min_dates[i:j], y, label='60 min average')
@@ -472,29 +464,9 @@ def Graph(path, name):
 
             axes = setup_axes(fig, cur_date, end_date)
 
+            setup_xticks(axes, cur_date, end_date, td = timedelta(days=2))
 
-            xticks, labels = [], []
-            date = datetime(cur_date.year, cur_date.month, 1)
-            while(date <= end_date):
-                xticks.append(date2num(date))
-                labels.append(format_date(date))
-                date += timedelta(days=2)
-
-            axes.set_xticks(xticks, minor=False)
-            axes.set_xticklabels(labels, minor=False)
-
-
-            xticks, labels = [], []
-            date = datetime(cur_date.year, cur_date.month, 1)
-            while(date <= end_date):
-                xticks.append(date2num(date))
-                labels.append(str(date.hour))
-                date += timedelta(hours=8)
-
-            axes.set_xticks(xticks, minor=True)
-            axes.set_xticklabels(labels, minor=True)
-
-            axes.set_yticks(range(ylim[0], ylim[1], 5), minor=False)
+            setup_xticks(axes, cur_date, end_date, minor = True, td = timedelta(hours=8), label = lambda date: str(date.hour))
 
 
             # draw and save
