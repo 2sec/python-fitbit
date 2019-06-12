@@ -272,7 +272,7 @@ def savefig(fig, path, filename, points):
     fig.canvas.draw()
 
     print('saving %s (%u points)..' % (filename, points))
-    plt.savefig(path + filename, dpi=100)
+    plt.savefig(path + filename, dpi=100, pad_inches = 0.5, bbox_inches = 'tight')
 
     fig.clear()
 
@@ -280,6 +280,7 @@ def savefig(fig, path, filename, points):
 
 #todo: calculate resting rate only for contiguous inactive periods of at least 5 minutes
 #todo: calculate night RHR, day RHR
+#todo: do not regenerate graphs if not needed
 
 
 def Graph(path, name):
