@@ -15,11 +15,12 @@ from matplotlib.dates import num2date
 from matplotlib.dates import date2num
 
 
+from matplotlib import rcParams
+rcParams['font.family'] = 'sans-serif'
+rcParams['font.sans-serif'] = 'Hermit'
+
 debug = False
 token = None
-ylim = [40, 150]    # heart range for the Y axis
-activity_pos = 45   # where on the Y axis the activity level is displayed in the weekly chart
-base_colors = ['lightblue', 'darkblue', 'indianred', 'darkred'] # color used for each activity level
 
 
 
@@ -235,12 +236,12 @@ def Download(path, start_date):
 
 
 def newfig(title):
-    fig = plt.figure(figsize=(20,10))  
+    fig = plt.figure(figsize=(20,10), dpi=100)  
     fig.suptitle(title)
     return fig
 
 
-def setup_axes(fig, date, end_date):
+def setup_axes(fig, date, end_date, ylim):
     plt.ylabel('BPM')
     plt.legend()
 
@@ -268,11 +269,11 @@ def setup_xticks(axes, date, end_date, minor = False, td = timedelta(days=1), la
     axes.set_xticklabels(labels, minor=minor)
 
 
-def savefig(fig, path, filename, points):
+def savefig(fig, path, base, points):
     fig.canvas.draw()
 
-    print('saving %s (%u points)..' % (filename, points))
-    plt.savefig(path + filename, dpi=100, pad_inches = 0.5, bbox_inches = 'tight')
+    print('saving %s (%u points)..' % (base, points))
+    plt.savefig(path + 'heart-' + base + '.png', pad_inches = 0.5, bbox_inches = 'tight')
 
     fig.clear()
 
@@ -295,8 +296,10 @@ def Graph(path, name):
         activity_levels = []
         activity_dates = []
         activity_colors = []
-
         
+        activity_pos = 45   # where on the Y axis the activity level is displayed in the weekly chart
+        base_colors = ['lightblue', 'darkblue', 'indianred', 'darkred'] # color used for each activity level
+
         data = open(path + 'm_calories-%u.csv' % year, 'rt').read()
         rows = data.split('\n')
         for row in rows:
@@ -356,14 +359,14 @@ def Graph(path, name):
 
             next_date = date + timedelta(minutes=60)
 
-            sum, j = 0, i
+            _sum, j = 0, i
             while i < n and dates[i] < next_date:
-                sum += values[i]
+                _sum += values[i]
                 i += 1
 
             if i > j:
                 heart_60min_dates.append(date)
-                heart_60min.append(sum / (i - j))
+                heart_60min.append(_sum / (i - j))
 
             date = next_date
                 
@@ -416,7 +419,7 @@ def Graph(path, name):
             
             # setup axes and ticks
 
-            axes = setup_axes(fig, cur_date, end_date)
+            axes = setup_axes(fig, cur_date, end_date, [40, 150])
 
             setup_xticks(axes, cur_date, end_date)
 
@@ -424,7 +427,7 @@ def Graph(path, name):
 
 
             # draw and save
-            savefig(fig, path, 'heart-%s.png' % date_fmt, j - i)
+            savefig(fig, path, date_fmt, j - i)
 
             i = j
             k = l
@@ -447,7 +450,7 @@ def Graph(path, name):
 
             date_fmt = format_date(date, day=False)
 
-            fig = newfig('Heart Rate %s %s / 1 month' % (name, date_fmt))
+            fig = newfig('Heart Rate %s %s' % (name, date_fmt))
 
             y = heart_60min[i:j]
             plt.plot(heart_60min_dates[i:j], y, label='60 min average')
@@ -463,7 +466,7 @@ def Graph(path, name):
 
             # setup axes and ticks
 
-            axes = setup_axes(fig, cur_date, end_date)
+            axes = setup_axes(fig, cur_date, end_date, [50, 120])
 
             setup_xticks(axes, cur_date, end_date, td = timedelta(days=2))
 
@@ -472,12 +475,56 @@ def Graph(path, name):
 
             # draw and save
 
-            savefig(fig, path, 'heart-%s.png' % date_fmt, j - i)
+            savefig(fig, path, date_fmt, j - i)
 
             i = j
 
 
 
+        # draw yearly graph
+
+        cur_date = datetime(date.year, 1, 1)
+        end_date = datetime(date.year + 1, 1, 1)
+
+        date = datetime(year, 1, 1)
+
+        date_fmt = format_date(date, month=False)
+
+        fig = newfig('Heart Rate %s %s' % (name, date_fmt))
+
+
+        # calculate 180 min average
+        if len(heart_60min) % 3:
+            del heart_60min[-1] 
+            del heart_60min_dates[-1] 
+
+        if len(heart_60min) % 3:
+            del heart_60min[-1] 
+            del heart_60min_dates[-1] 
+
+        heart_180min_dates = heart_60min_dates[::3]
+        heart_180min = [sum(i)/3 for i in zip(heart_60min[::3], heart_60min[1::3],  heart_60min[2::3])]
+
+
+        plt.plot(heart_180min_dates, heart_180min, label='180 min average')
+
+
+        y = polyfit(heart_180min)
+        plt.plot(heart_180min_dates, y, label='trend')
+
+
+        # setup axes and ticks
+
+        axes = setup_axes(fig, cur_date, end_date, [50, 120])
+
+        setup_xticks(axes, cur_date, end_date, td = timedelta(days=31), label = lambda date: format_date(date, day = False))
+
+        setup_xticks(axes, cur_date, end_date, minor = True, td = timedelta(days=7), label = lambda date: str(date.day))
+
+
+        # draw and save
+
+        savefig(fig, path, date_fmt, len(heart_180min))
 
 
 
