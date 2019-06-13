@@ -220,7 +220,7 @@ def Download(path, start_date):
                                 tm = '%02u:%02u:%02u' % (dt.hour, dt.minute, dt.second)
                                 dt = format_date(dt)
 
-                                f.write('%s;%s;%s;%s;%s\n' % (dt, tm, sleep_type, row['level'], row['seconds']))
+                                f.write('%s;%s;%s;%s;%s\n' % (dt, tm, row['level'], row['seconds'], sleep_type))
 
                     #make sure the file is sorted by date/time (not always the case as the sleep types are grouped together first)
                     with open(csv_file, 'rt') as f: data = f.read()
@@ -279,9 +279,28 @@ def savefig(fig, path, base, points):
     fig.clear()
 
 
-def average_60min(dates, values):
+# read the first columns of a CSV (date/time and value) 
+def read_csv(path, base, year):
+    dates = []
+    values = []
+    data = open(path + '%s-%u.csv' % (base, year), 'rt').read()
+    rows = data.split('\n')
+    for row in rows:
+        if row:
+            cols = row.split(';')
 
-    dates_60min, values_60min = [], []
+            date = datetime.fromisoformat('%s %s' % (cols[0], cols[1]))
+            value = int(cols[2])
+
+            dates.append(date)
+            values.append(value)
+
+    return dates, values
+
+
+# group and average the given dates/values per given minutes
+def average(dates, values, minutes):
+    dates_a, values_a = [], []
 
     date = dates[0]
     date = date.replace(second = 0, microsecond = 0)
@@ -289,7 +308,7 @@ def average_60min(dates, values):
     i = 0 
     while i < len(dates):
 
-        next_date = date + timedelta(minutes=60)
+        next_date = date + timedelta(minutes=minutes)
 
         _sum, j = 0, i
         while i < len(dates) and dates[i] < next_date:
@@ -297,15 +316,13 @@ def average_60min(dates, values):
             i += 1
 
         if i > j:
-            dates_60min.append(date)
-            values_60min.append(_sum / (i - j))
+            dates_a.append(date)
+            values_a.append(round(_sum / (i - j)))
 
         date = next_date
 
 
-    return dates_60min, values_60min
-
-    
+    return dates_a, values_a
 
 
 
@@ -316,83 +333,58 @@ def Graph(path, name):
     year, end_year = get_years_from_csv(path, 'calories')
 
     for year in range(year, end_year + 1):
-
         print('loading %u...' % year)
 
-
         # read activity levels
-        activity_levels = []
-        activity_dates = []
-        activity_colors = []
-        
-        activity_pos = 45   # where on the Y axis the activity level is displayed in the weekly chart
-        base_colors = ['lightblue', 'darkblue', 'indianred', 'darkred'] # color used for each activity level
+        activity_dates, activity_levels = read_csv(path, 'm_calories', year)
 
-        data = open(path + 'm_calories-%u.csv' % year, 'rt').read()
-        rows = data.split('\n')
-        for row in rows:
-            if row:
-                cols = row.split(';')
+        # read heart rate values
+        dates, values = read_csv(path, 'm_heart', year)
+        # average to 1 min values        
+        dates, values = average(dates, values, 1)
 
-                dt = datetime.fromisoformat('%s %s' % (cols[0], cols[1]))
-                level = int(cols[2])
-
-                activity_dates.append(dt)
-                activity_levels.append(activity_pos + level)
-
-                activity_colors.append(base_colors[level])
-
-
-
-        # read heart rate values and associate activity levels and resting rates
-
-        dates = []
-        values = []
+        # associate activity levels and resting rates
         levels = []
-
         resting_rate = []
         resting_rate_dates = []
-
         last_resting_date = None
 
-        data = open(path + 'm_heart-%u.csv' % year, 'rt').read()
-        rows = data.split('\n')
         i = 0
-        for row in rows:
-            if row:
-                cols = row.split(';')
-
-                dt = datetime.fromisoformat('%s %s' % (cols[0], cols[1]))
-                value = int(cols[2])
-
-                dates.append(dt)
-                values.append(value)
-
+        for date, value in zip(dates, values):
                 # find corresponding activity
-                while activity_dates[i] < dt: i = i+1
+                while activity_dates[i] < date: i = i+1
 
                 level = activity_levels[i]
                 levels.append(level)
 
                 # only count as a resting rate if inactive for at least 5 min
-                if level == activity_pos:
+                if level == 0:
                     if last_resting_date is None: 
-                        last_resting_date = dt
-                    elif (dt - last_resting_date).total_seconds() > 5 * 60:
+                        last_resting_date = date
+                    elif (date - last_resting_date).total_seconds() > 5 * 60:
                         resting_rate.append(value)
-                        resting_rate_dates.append(dt)
+                        resting_rate_dates.append(date)
                 else:
                     last_resting_date = None
 
 
-
-
         # calculate averages 
-        heart_60min_dates, heart_60min = average_60min(dates, values)
-        resting_rate_60min_dates, resting_rate_60min = average_60min(resting_rate_dates, resting_rate)
+        heart_60min_dates, heart_60min = average(dates, values, 60)
+        resting_rate_60min_dates, resting_rate_60min = average(resting_rate_dates, resting_rate, 60)
 
 
         print('graphing...')
+
+
+
+        # calculate activity colors 
+        activity_colors = []
+        activity_offset = 45   # where on the Y axis the activity level is displayed in the weekly chart
+        base_colors = ['lightblue', 'darkblue', 'indianred', 'darkred'] # color used for each activity level
+
+        for i, level in enumerate(activity_levels):
+            activity_levels[i] += activity_offset
+            activity_colors.append(base_colors[level])
 
 
         # draw weekly graph
@@ -419,7 +411,7 @@ def Graph(path, name):
 
             fig = newfig('Heart Rate %s %s / 7 days' % (name, date_fmt))
 
-            plt.plot(dates[i:j], values[i:j], label='5 sec heart rate')
+            plt.plot(dates[i:j], values[i:j], label='1 min heart rate')
 
             x = heart_60min_dates[p:q]
             y = heart_60min[p:q]
@@ -441,7 +433,7 @@ def Graph(path, name):
             # setup axes and ticks
             axes = setup_axes(fig, cur_date, end_date, [40, 150])
             setup_xticks(axes, cur_date, end_date)
-            setup_xticks(axes, cur_date, end_date, minor = True, td = timedelta(hours=8), label = lambda date: str(date.hour))
+            setup_xticks(axes, cur_date, end_date, minor = True, td = timedelta(hours=4), label = lambda date: str(date.hour))
 
 
             # draw and save
@@ -509,10 +501,10 @@ def Graph(path, name):
 
         fig = newfig('Heart Rate %s %s' % (name, date_fmt))
 
-        y = polyfit(heart_60min)
+        y = polyfit(heart_60min, deg = 1)
         plt.plot(heart_60min_dates, y, label='60 min average trend')
 
-        y = polyfit(resting_rate_60min)
+        y = polyfit(resting_rate_60min, deg = 1)
         plt.plot(resting_rate_60min_dates, y, label='60 min resting average trend')
 
 
