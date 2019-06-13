@@ -250,6 +250,7 @@ def setup_axes(fig, date, end_date, ylim):
     axes.grid(True, linestyle='--', which='major')
     axes.grid(True, linestyle=':', which='minor')
     axes.tick_params(axis='x', which='major', pad=20)
+    axes.tick_params(axis='y', labelright = True)
 
     axes.set_xlim(date, end_date)
 
@@ -278,11 +279,38 @@ def savefig(fig, path, base, points):
     fig.clear()
 
 
+def average_60min(dates, values):
 
-#todo: calculate resting rate only for contiguous inactive periods of at least 5 minutes
-#todo: calculate night RHR, day RHR
+    dates_60min, values_60min = [], []
+
+    date = dates[0]
+    date = date.replace(second = 0, microsecond = 0)
+
+    i = 0 
+    while i < len(dates):
+
+        next_date = date + timedelta(minutes=60)
+
+        _sum, j = 0, i
+        while i < len(dates) and dates[i] < next_date:
+            _sum += values[i]
+            i += 1
+
+        if i > j:
+            dates_60min.append(date)
+            values_60min.append(_sum / (i - j))
+
+        date = next_date
+
+
+    return dates_60min, values_60min
+
+    
+
+
+
+
 #todo: do not regenerate graphs if not needed
-
 
 def Graph(path, name):
     year, end_year = get_years_from_csv(path, 'calories')
@@ -316,11 +344,16 @@ def Graph(path, name):
 
 
 
-        # read heart rate values and associate activity levels
+        # read heart rate values and associate activity levels and resting rates
 
         dates = []
         values = []
         levels = []
+
+        resting_rate = []
+        resting_rate_dates = []
+
+        last_resting_date = None
 
         data = open(path + 'm_heart-%u.csv' % year, 'rt').read()
         rows = data.split('\n')
@@ -341,37 +374,22 @@ def Graph(path, name):
                 level = activity_levels[i]
                 levels.append(level)
 
+                # only count as a resting rate if inactive for at least 5 min
+                if level == activity_pos:
+                    if last_resting_date is None: 
+                        last_resting_date = dt
+                    elif (dt - last_resting_date).total_seconds() > 5 * 60:
+                        resting_rate.append(value)
+                        resting_rate_dates.append(dt)
+                else:
+                    last_resting_date = None
 
 
 
 
-        # calculate 60 min heart averages
-
-        heart_60min = []
-        heart_60min_dates = []
-
-
-        date = dates[0]
-        date = date.replace(second = 0, microsecond = 0)
-
-        i, n = 0, len(dates)
-        while i < n:
-
-            next_date = date + timedelta(minutes=60)
-
-            _sum, j = 0, i
-            while i < n and dates[i] < next_date:
-                _sum += values[i]
-                i += 1
-
-            if i > j:
-                heart_60min_dates.append(date)
-                heart_60min.append(_sum / (i - j))
-
-            date = next_date
-                
-
-
+        # calculate averages 
+        heart_60min_dates, heart_60min = average_60min(dates, values)
+        resting_rate_60min_dates, resting_rate_60min = average_60min(resting_rate_dates, resting_rate)
 
 
         print('graphing...')
@@ -383,46 +401,46 @@ def Graph(path, name):
         i = j = 0
         k = l = 0
         p = q = 0
-
-
+        r = s = 0
 
         date = start_date
-        while i < n:
+        while i < len(dates):
             print(date)
 
-            
             cur_date = date
             end_date = date + timedelta(days=7)
 
             while j < len(dates) and dates[j] < end_date: j += 1
             while l < len(activity_dates) and activity_dates[l] < end_date: l += 1
             while q < len(heart_60min_dates) and heart_60min_dates[q] < end_date: q += 1
+            while s < len(resting_rate_60min_dates) and resting_rate_60min_dates[s] < end_date: s += 1
 
             date_fmt = format_date(date)
 
             fig = newfig('Heart Rate %s %s / 7 days' % (name, date_fmt))
 
-            plt.plot(dates[i:j], values[i:j], label='5 sec heart rate', zorder=1)
-
+            plt.plot(dates[i:j], values[i:j], label='5 sec heart rate')
 
             x = heart_60min_dates[p:q]
             y = heart_60min[p:q]
-
-            plt.plot(x, y, label='60 min average', zorder=3)
-
+            plt.plot(x, y, label='60 min average')
             y = polyfit(y)
             plt.plot(x, y, label='trend')
 
 
-            plt.scatter(activity_dates[k:l], activity_levels[k:l], s=1, c=activity_colors[k:l], marker='.', label='1 min activity level', zorder=10)
+            x = resting_rate_60min_dates[r:s]
+            y = resting_rate_60min[r:s]
+            plt.plot(x, y, label='60 min resting average')
+            y = polyfit(y)
+            plt.plot(x, y, label='trend')
+
+
+            plt.scatter(activity_dates[k:l], activity_levels[k:l], s=1, c=activity_colors[k:l], marker='.', label='1 min activity level')
 
             
             # setup axes and ticks
-
             axes = setup_axes(fig, cur_date, end_date, [40, 150])
-
             setup_xticks(axes, cur_date, end_date)
-
             setup_xticks(axes, cur_date, end_date, minor = True, td = timedelta(hours=8), label = lambda date: str(date.hour))
 
 
@@ -432,21 +450,23 @@ def Graph(path, name):
             i = j
             k = l
             p = q
+            r = s
             date = end_date
 
 
 
         # draw monthly graph
-        i, n = 0, len(heart_60min_dates)
-
-        while i < n:
+        i = 0
+        k = 0
+        while i < len(heart_60min_dates):
             date = heart_60min_dates[i]
             print(date)
 
             j = i
+            while j < len(heart_60min_dates) and heart_60min_dates[j].month == date.month : j += 1
 
-
-            while j < n and heart_60min_dates[j].month == date.month : j += 1
+            l = k
+            while l < len(resting_rate_60min_dates) and resting_rate_60min_dates[l].month == date.month : l += 1
 
             date_fmt = format_date(date, day=False)
 
@@ -454,77 +474,56 @@ def Graph(path, name):
 
             y = heart_60min[i:j]
             plt.plot(heart_60min_dates[i:j], y, label='60 min average')
-
-
             y = polyfit(y)
             plt.plot(heart_60min_dates[i:j], y, label='trend')
 
 
+            y = resting_rate_60min[k:l]
+            plt.plot(resting_rate_60min_dates[k:l], y, label='60 min resting average')
+            y = polyfit(y)
+            plt.plot(resting_rate_60min_dates[k:l], y, label='trend')
+
             cur_date = datetime(date.year, date.month, 1)
             end_date = datetime(date.year + 1, 1, 1) if date.month == 12 else datetime(date.year, date.month + 1, 1)
             
-
             # setup axes and ticks
-
             axes = setup_axes(fig, cur_date, end_date, [50, 120])
-
             setup_xticks(axes, cur_date, end_date, td = timedelta(days=2))
-
             setup_xticks(axes, cur_date, end_date, minor = True, td = timedelta(hours=8), label = lambda date: str(date.hour))
 
 
             # draw and save
-
             savefig(fig, path, date_fmt, j - i)
 
             i = j
+            k = l
 
 
 
         # draw yearly graph
-
         cur_date = datetime(date.year, 1, 1)
         end_date = datetime(date.year + 1, 1, 1)
 
         date = datetime(year, 1, 1)
-
         date_fmt = format_date(date, month=False)
 
         fig = newfig('Heart Rate %s %s' % (name, date_fmt))
 
+        y = polyfit(heart_60min)
+        plt.plot(heart_60min_dates, y, label='60 min average trend')
 
-        # calculate 180 min average
-        if len(heart_60min) % 3:
-            del heart_60min[-1] 
-            del heart_60min_dates[-1] 
-
-        if len(heart_60min) % 3:
-            del heart_60min[-1] 
-            del heart_60min_dates[-1] 
-
-        heart_180min_dates = heart_60min_dates[::3]
-        heart_180min = [sum(i)/3 for i in zip(heart_60min[::3], heart_60min[1::3],  heart_60min[2::3])]
-
-
-        plt.plot(heart_180min_dates, heart_180min, label='180 min average')
-
-
-        y = polyfit(heart_180min)
-        plt.plot(heart_180min_dates, y, label='trend')
+        y = polyfit(resting_rate_60min)
+        plt.plot(resting_rate_60min_dates, y, label='60 min resting average trend')
 
 
         # setup axes and ticks
-
         axes = setup_axes(fig, cur_date, end_date, [50, 120])
-
         setup_xticks(axes, cur_date, end_date, td = timedelta(days=31), label = lambda date: format_date(date, day = False))
-
         setup_xticks(axes, cur_date, end_date, minor = True, td = timedelta(days=7), label = lambda date: str(date.day))
 
 
         # draw and save
-
-        savefig(fig, path, date_fmt, len(heart_180min))
+        savefig(fig, path, date_fmt, len(heart_60min))
 
 
 
