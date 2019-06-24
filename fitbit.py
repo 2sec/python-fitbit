@@ -69,13 +69,13 @@ def get_modify_date(filename):
 
 
 # test if the given file is complete based on its last modify date or if has to be regenerated
-def must_regenerate(filename, date):
+def must_regenerate(filename, date, days = 1):
     regenerate = True
 
     modify_date = get_modify_date(filename)
     if modify_date:
         #the file must be (re)generated if was modified before the corresponding day was finished (i.e. it is incomplete)
-        regenerate = modify_date < date + timedelta(days=1)
+        regenerate = modify_date < date + timedelta(days=days)
 
     if regenerate:
         print('generating %s' % filename)
@@ -405,7 +405,7 @@ def Graph(path, name):
 
             date_fmt = format_date(date)
 
-            if must_regenerate(path + 'heart-' + date_fmt + '.png', end_date):
+            if must_regenerate(path + 'heart-' + date_fmt + '.png', end_date, 0):
 
                 fig = newfig('Heart Rate %s %s / 7 days' % (name, date_fmt))
 
@@ -464,7 +464,7 @@ def Graph(path, name):
 
             date_fmt = format_date(date, day=False)
             
-            if must_regenerate(path + 'heart-' + date_fmt + '.png', end_date):
+            if must_regenerate(path + 'heart-' + date_fmt + '.png', end_date, 0):
                 fig = newfig('Heart Rate %s %s' % (name, date_fmt))
 
                 y = heart_60min[i:j]
@@ -499,7 +499,7 @@ def Graph(path, name):
         date = datetime(year, 1, 1)
         date_fmt = format_date(date, month=False)
 
-        if must_regenerate(path + 'heart-' + date_fmt + '.png', end_date):
+        if must_regenerate(path + 'heart-' + date_fmt + '.png', end_date, 0):
             fig = newfig('Heart Rate %s %s' % (name, date_fmt))
 
             y = polyfit(heart_60min, deg = 1)
