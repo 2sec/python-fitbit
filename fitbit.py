@@ -220,14 +220,14 @@ def Download(path, start_date):
 
                                 f.write('%s;%s;%s;%s;%s\n' % (dt, tm, row['level'], row['seconds'], sleep_type))
 
-                    #make sure the file is sorted by date/time (not always the case as the sleep types are grouped together first)
-                    with open(csv_file, 'rt') as f: data = f.read()
-                    data = data.split('\n')
-                    data.sort()
-                    with open(csv_file, 'wt') as f: 
-                        for row in data:
-                            if row:
-                                f.write(row + '\n')
+                #make sure the file is sorted by date/time (not always the case as the sleep types are grouped together first)
+                with open(csv_file, 'rt') as f: data = f.read()
+                data = data.split('\n')
+                data.sort()
+                with open(csv_file, 'wt') as f: 
+                    for row in data:
+                        if row:
+                            f.write(row + '\n')
             
         date += timedelta(days=1)
 
