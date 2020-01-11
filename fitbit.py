@@ -10,6 +10,7 @@ import requests
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 from matplotlib.dates import num2date
 from matplotlib.dates import date2num
 
@@ -244,6 +245,7 @@ def setup_axes(fig, date, end_date, ylim):
     plt.legend()
 
     axes = fig.axes[0]
+
     
     axes.grid(True, linestyle='--', which='major')
     axes.grid(True, linestyle=':', which='minor')
@@ -257,11 +259,20 @@ def setup_axes(fig, date, end_date, ylim):
 
     return axes
 
+
 def setup_xticks(axes, date, end_date, minor = False, td = timedelta(days=1), label = lambda date: format_date(date)):
     xticks, labels = [], []
+
+    # apparently matplotlib no longer allows minor ticks to overlap with major ticks!
+    # https://github.com/matplotlib/matplotlib/issues/13618#issuecomment-471089726
+    # a few graphs should be regenerated
+    # hence the following hack
+    major_xticks = axes.get_xticks()
+
     while(date <= end_date):
-        xticks.append(date2num(date))
-        labels.append(label(date))
+        if not minor or not date2num(date) in major_xticks:
+            xticks.append(date) #
+            labels.append(label(date))
         date += td
 
     axes.set_xticks(xticks, minor=minor)
@@ -435,8 +446,10 @@ def Graph(path, name):
                 setup_xticks(axes, cur_date, end_date, minor = True, td = timedelta(hours=4), label = lambda date: str(date.hour))
 
 
+
                 # draw and save
                 savefig(fig, path, date_fmt, j - i)
+
 
             i = j
             k = l
